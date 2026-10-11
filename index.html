@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mini Calculator</title>
+  <style>
+    :root {
+      --paper: #d7d0c3;
+      --shell: #2b2924;
+      --shell-edge: #1a1916;
+      --screen: #d7e2c4;
+      --ink: #1c2616;
+      --ghost: #5d6a52;
+      --key: #3c3a35;
+      --key-text: #f3eee6;
+      --fn: #4a473f;
+      --op: #c56a3a;
+      --eq: #e6a23c;
+      --shadow: 0 18px 40px rgba(40, 32, 20, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 20% 10%, #efe8da 0%, transparent 42%),
+        var(--paper);
+      color: var(--ink);
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+
+    .calc {
+      width: min(92vw, 320px);
+      padding: 18px 16px 16px;
+      border-radius: 28px;
+      background: linear-gradient(180deg, #35332d 0%, var(--shell) 40%);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--shell-edge);
+    }
+
+    .brand {
+      margin: 0 4px 10px;
+      color: #b7b1a4;
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .screen {
+      background: var(--screen);
+      border-radius: 14px;
+      min-height: 92px;
+      padding: 12px 14px 10px;
+      margin-bottom: 14px;
+      box-shadow: inset 0 2px 6px rgba(40, 50, 20, 0.18);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+
+    .expr {
+      min-height: 1.1em;
+      text-align: right;
+      color: var(--ghost);
+      font-size: 0.85rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .value {
+      margin: 0;
+      text-align: right;
+      font-size: 2.15rem;
+      line-height: 1.1;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .keys {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      height: 58px;
+      border-radius: 14px;
+      background: var(--key);
+      color: var(--key-text);
+      font: inherit;
+      font-size: 1.15rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 0 rgba(0, 0, 0, 0.35);
+    }
+
+    button:hover { filter: brightness(1.08); }
+    button:active { transform: translateY(1px); }
+    button:focus-visible {
+      outline: 2px solid var(--eq);
+      outline-offset: 2px;
+    }
+
+    button.fn { background: var(--fn); color: #ddd6c8; font-size: 0.95rem; }
+    button.op { background: var(--op); }
+    button.eq { background: var(--eq); color: #2a2114; }
+    button.is-active { box-shadow: inset 0 0 0 2px #ffe1c2; }
+
+    .wide { grid-column: span 2; }
+  </style>
+</head>
+<body>
+  <main class="calc">
+    <p class="brand">Mini Calculator</p>
+    <div class="screen">
+      <div class="expr" id="expr"></div>
+      <p class="value" id="value" aria-live="polite">0</p>
+    </div>
+    <div class="keys" role="group" aria-label="Calculator keys">
+      <button class="fn" data-key="c" type="button">C</button>
+      <button class="fn" data-key="back" type="button" aria-label="Backspace">DEL</button>
+      <button class="fn" data-key="neg" type="button" aria-label="Change sign">±</button>
+      <button class="op" data-key="/" type="button" aria-label="Divide">÷</button>
+
+      <button data-key="7" type="button">7</button>
+      <button data-key="8" type="button">8</button>
+      <button data-key="9" type="button">9</button>
+      <button class="op" data-key="*" type="button" aria-label="Multiply">×</button>
+
+      <button data-key="4" type="button">4</button>
+      <button data-key="5" type="button">5</button>
+      <button data-key="6" type="button">6</button>
+      <button class="op" data-key="-" type="button" aria-label="Subtract">−</button>
+
+      <button data-key="1" type="button">1</button>
+      <button data-key="2" type="button">2</button>
+      <button data-key="3" type="button">3</button>
+      <button class="op" data-key="+" type="button" aria-label="Add">+</button>
+
+      <button class="wide" data-key="0" type="button">0</button>
+      <button data-key="." type="button" aria-label="Decimal point">.</button>
+      <button class="eq" data-key="=" type="button" aria-label="Equals">=</button>
+    </div>
+  </main>
+
+  <script>
+    const valueEl = document.getElementById("value");
+    const exprEl = document.getElementById("expr");
+    const symbols = { "+": "+", "-": "−", "*": "×", "/": "÷" };
+
+    let current = "0";
+    let stored = null;
+    let operator = null;
+    let replace = true;
+    let hasError = false;
+
+    function formatNumber(n) {
+      if (!Number.isFinite(n)) return null;
+      const rounded = Math.round((n + Number.EPSILON) * 1e10) / 1e10;
+      const abs = Math.abs(rounded);
+      if (abs !== 0 && (abs >= 1e12 || abs < 1e-8)) {
+        return rounded.toExponential(6).replace(/\.?0+e/, "e");
+      }
+      return String(rounded);
+    }
+
+    function render() {
+      valueEl.textContent = current;
+      exprEl.textContent = stored !== null && operator
+        ? formatNumber(stored) + " " + symbols[operator]
+        : "";
+      document.querySelectorAll("button.op").forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.key === operator);
+      });
+    }
+
+    function clearAll() {
+      current = "0";
+      stored = null;
+      operator = null;
+      replace = true;
+      hasError = false;
+      render();
+    }
+
+    function fail() {
+      current = "Error";
+      stored = null;
+      operator = null;
+      replace = true;
+      hasError = true;
+      render();
+    }
+
+    function compute(a, b, op) {
+      if (op === "+") return formatNumber(a + b);
+      if (op === "-") return formatNumber(a - b);
+      if (op === "*") return formatNumber(a * b);
+      if (b === 0) return null;
+      return formatNumber(a / b);
+    }
+
+    function digit(d) {
+      if (hasError) clearAll();
+      if (replace) {
+        current = d;
+        replace = false;
+      } else if (current.replace("-", "").replace(".", "").length >= 12) {
+        return;
+      } else if (current === "0") {
+        current = d;
+      } else if (current === "-0") {
+        current = "-" + d;
+      } else {
+        current += d;
+      }
+      render();
+    }
+
+    function dot() {
+      if (hasError) clearAll();
+      if (replace) {
+        current = "0.";
+        replace = false;
+      } else if (!current.includes(".")) {
+        current += ".";
+      }
+      render();
+    }
+
+    function setOp(next) {
+      if (hasError) return;
+      const value = Number(current);
+      if (operator && stored !== null && !replace) {
+        const result = compute(stored, value, operator);
+        if (result === null) return fail();
+        current = result;
+        stored = Number(result);
+      } else {
+        stored = value;
+      }
+      operator = next;
+      replace = true;
+      render();
+    }
+
+    function equals() {
+      if (hasError || operator === null || stored === null) return;
+      const result = compute(stored, Number(current), operator);
+      if (result === null) return fail();
+      current = result;
+      stored = null;
+      operator = null;
+      replace = true;
+      render();
+    }
+
+    function backspace() {
+      if (hasError || replace) return;
+      if (current.length <= 1 || (current.length === 2 && current.startsWith("-"))) {
+        current = "0";
+        replace = true;
+      } else {
+        current = current.slice(0, -1);
+        if (current === "-" || current === "") current = "0";
+      }
+      render();
+    }
+
+    function negate() {
+      if (hasError || current === "0") return;
+      current = current.startsWith("-") ? current.slice(1) : "-" + current;
+      if (current === "-") current = "0";
+      render();
+    }
+
+    function press(key) {
+      if (key >= "0" && key <= "9") digit(key);
+      else if (key === ".") dot();
+      else if (key === "+" || key === "-" || key === "*" || key === "/") setOp(key);
+      else if (key === "=") equals();
+      else if (key === "c") clearAll();
+      else if (key === "back") backspace();
+      else if (key === "neg") negate();
+    }
+
+    document.querySelector(".keys").addEventListener("click", (event) => {
+      const btn = event.target.closest("button");
+      if (!btn) return;
+      press(btn.dataset.key);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const key = event.key;
+      const map = {
+        Enter: "=",
+        "=": "=",
+        Escape: "c",
+        Backspace: "back",
+        Delete: "c",
+        "+": "+",
+        "-": "-",
+        "*": "*",
+        "/": "/",
+        ".": ".",
+        ",": "."
+      };
+      const action = map[key] || (key >= "0" && key <= "9" ? key : null);
+      if (!action) return;
+      event.preventDefault();
+      press(action);
+    });
+
+    render();
+  </script>
+</body>
+</html>
